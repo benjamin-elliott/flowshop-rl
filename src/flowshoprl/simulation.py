@@ -1,6 +1,11 @@
+import heapq
+import itertools
+import math
 from dataclasses import dataclass
+from typing import NamedTuple
 
 import numpy as np
+import numpy.typing as npt
 
 import flowshoprl.distributions as dis
 
@@ -17,7 +22,7 @@ class JobClass:
     weight: float = 1.0
 
     def __post_init__(self) -> None:
-        for pt, idx in enumerate(self.proc_times):
+        for idx, pt in enumerate(self.proc_times):
             if not pt > 0:
                 raise ValueError(
                     f"@JobClass: ({self.name}) all processing times must be greater than 0. Got {pt} at index {idx}"
@@ -64,4 +69,91 @@ class SimSpec:
             raise ValueError(f"@SimSpec: T must be greater than 0. Got {self.T}")
 
         if not np.all(self.S >= 0):
-            raise ValueError(f"@SimSpec: All values of S must be greater than 0.")
+            raise ValueError(
+                f"@SimSpec: All values of S must be greater than or equal to 0."
+            )
+
+
+class event(NamedTuple):
+    # declaration order is the sort order for the heap
+    time: float
+    event_type: int
+    prio: int
+    epoch: int
+    seq: int
+    job_id: int
+
+
+@dataclass(slots=True)
+class Job:
+    job_id: int  # index in jobs list
+    job_class: int  # index into JobClasses tuple in spec
+    release: float  # release time into system
+    arrived: list[float]  # arrival time at each machine, default [-1.0] * (M+1)
+    setup_incurred: list[float]  # setup time incurred at each machine, [0.0] * M
+
+
+# simulation instance; single spec-to-result object
+# simulation structure: makes use of a binary min heap to progress from event to event
+# spec defines the simulation paramters
+# policy defines the decision policy at each epoch
+# eval defines the post-simulation evaluation method, if any
+class Simulation:
+    def __init__(
+        self, rng: np.random.Generator, spec: SimSpec, a_policy: ..., a_eval: ...
+    ) -> None:
+
+        # pregenerate arrival time trace for each job class
+        self.at_trace = []  # arrival times
+        class_rngs = rng.spawn(spec.C)
+        for c in range(spec.C):
+            self.at_trace.append(
+                self._generate_trace(class_rngs[c], spec.job_classes[c].iat, spec.T)
+            )
+
+        # generate job list from the arrivals
+        merged = sorted((t, c) for c in range(spec.C) for t in self.at_trace[c])
+        self.jobs = [
+            Job(
+                job_id=i,
+                job_class=c,
+                release=t,
+                arrived=[-1.0] * (spec.M + 1),
+                setup_incurred=[0.0] * spec.M,
+            )
+            for i, (t, c) in enumerate(merged)
+        ]
+
+        self.seq = itertools.count()
+        self.event_heap = []
+        for j in self.jobs:
+            self.event_heap.append(
+                event(
+                    time=j.release,
+                    event_type=1,
+                    prio=j.job_class,
+                    epoch=0,
+                    seq=next(self.seq),
+                    job_id=j.job_id,
+                )
+            )
+        heapq.heapify(self.event_heap)
+
+    # generate an arrival time trace from a specified IAT distribution, truncating at T
+    def _generate_trace(
+        self, rng: np.random.Generator, iat: dis.Distribution, T: float
+    ) -> npt.NDArray[np.float64]:
+
+        # an approximation for the number of samples to generate, should generally loop once
+        chunk_size = math.ceil(1.5 * T / iat.mean)
+        chunks = []
+        t = 0.0
+        while True:
+            times = t + np.cumsum(iat.sample(rng, chunk_size))
+            chunks.append(times)
+            if times[-1] > T:
+                break
+            t = times[-1]
+
+        times = np.concatenate(chunks)
+        return times[: np.searchsorted(times, T, side="right")]
