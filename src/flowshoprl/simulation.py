@@ -29,6 +29,7 @@ class Simulation:
 
         self.spec = spec
         self.policy = a_policy
+        self.policy.reset()
         self.m0_free = True
         self.setup_class = 0  # default the setup state
         self.job_ids = [deque() for _ in range(self.spec.C)]
@@ -232,6 +233,9 @@ class Simulation:
                     Event(current.time + t[0], 0, 0, self.epoch, next(self.seq), j)
                 )
 
+                self.jobs[j].arrived[0] = current.time
+                self.jobs[j].setup_incurred[0] = self.state.setup[c]
+
                 # TODO: we don't actually need to consider events where non m0 machines are released - just write completions directly to jobs
                 for m in range(1, self.spec.M):
                     t[m] = (
@@ -242,6 +246,11 @@ class Simulation:
                     events.append(
                         Event(current.time + t[m], 0, -m, self.epoch, next(self.seq), j)
                     )
+                    
+                    self.jobs[j].arrived[m] = current.time + t[m-1]
+                    self.jobs[j].setup_incurred[m] = self.spec.S[m][self.setup_class][c]
+
+                self.jobs[j].arrived[-1] = current.time + t[-1]
 
                 queue_decrement = [0] * self.spec.C
                 queue_decrement[c] = 1
@@ -306,7 +315,7 @@ class Simulation:
         # TODO remove this at some point, and handle the empty event heap as a runtime error
         # TODO once policy masking has been properly implemented
         if not events:
-            events.append(Event(current.time, 2, 0, self.epoch, next(self.seq), -1))
+            raise RuntimeError(f'Decision at {current.time} made no events. All decisions must result in event insertion to prevent hanging.')
         for event in events:
             heapq.heappush(self.event_heap, event)
 

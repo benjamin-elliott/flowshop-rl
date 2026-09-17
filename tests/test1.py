@@ -16,7 +16,7 @@ S = np.array([[[0.0, 0.0], [0.0, 0.0]], [[0.0, 0.0], [0.0, 0.0]]])
 
 spec = SimSpec(job_classes, 2, 2, [1.0], 10.0, S)
 rng = rand.default_rng(42)
-policy = Test1(spec, 1)
+policy = Test1(spec)
 
 sim = Simulation(rng, spec, policy, True)
 sim.simulate()

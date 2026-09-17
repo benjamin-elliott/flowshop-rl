@@ -110,6 +110,10 @@ class SimSpec:
 
         self.mpt = self.mpt / n
 
+        S = np.array(self.S, dtype=float, copy=True)
+        S.setflags(write=False)
+        self.S = S
+
 
 class StateNormalised(NamedTuple):
     # State, but normalised.

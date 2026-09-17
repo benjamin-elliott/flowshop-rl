@@ -7,11 +7,14 @@ from flowshoprl.structs import SimSpec, StateNormalised
 
 
 class Policy(ABC):
-    def __init__(self, spec: SimSpec, K: int):
+    def __init__(self, spec: SimSpec):
         # K: the number of delay multipliers
-        self.K = K
+        self.K = len(spec.k)
         self.C = len(spec.job_classes)
         self.spec = spec
+        self.reset()
+
+    def reset(self) -> None: ...
 
     @abstractmethod
     def decide(self, state: StateNormalised) -> int: ...
@@ -25,7 +28,7 @@ class Policy(ABC):
             case 1: return int(self.C + c * self.K + k)
 
             # delay until cutoff
-            case 2: return int(self.C + self.C * self.K + self.K-1)
+            case 2: return int(self.C * (self.K + 1))
 
         return -1
     # 0:C-1 -> dispatch job of class c
@@ -72,7 +75,7 @@ class BatchThenWait(Policy):
     # but only within cutoff.
     # Then, dispatch a job with the shortest setup time
     # among jobs in the queue.
-    def __post_init__(self, K: int):
+    def reset(self):
         self.last_class = 0
 
     def decide(self, state: StateNormalised) -> int:

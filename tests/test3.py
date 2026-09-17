@@ -22,8 +22,8 @@ S = np.array(
 
 spec = SimSpec(job_classes, 3, 2, [1.0], 5.0, S)
 
-shortest = ShortestSetup(spec, 1)
-batch = BatchThenWait(spec, 1)
+shortest = ShortestSetup(spec)
+batch = BatchThenWait(spec)
 
 I = 1
 debug = True

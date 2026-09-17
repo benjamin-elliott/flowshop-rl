@@ -23,7 +23,7 @@ class Makespan(Evaluator[float]):
 
     def display(self) -> None:
         print("\n" + "*" * 40)
-        print(f"Makespan: {self.sim.state.time}")
+        print(f"Makespan: {self._objective}")
         print("*" * 40)
 
     @property
@@ -41,6 +41,11 @@ class Flowtime(Evaluator[float]):
         return self.flow
 
     def display(self) -> None:
+        _ = self.evaluate()
         print('\n' + "*"*40)
         print(f'Weighted Flowtime: {self.flow}')
         print('\n' + "*"*40)
+
+    @property
+    def _objective(self) -> float:
+        return self.evaluate()
