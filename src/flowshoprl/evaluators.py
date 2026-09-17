@@ -16,14 +16,15 @@ class Evaluator[T](ABC):
     @property
     def _objective(self) -> T: ...
 
+
 class Makespan(Evaluator[float]):
     def evaluate(self) -> float:
         return self.sim.state.time
 
     def display(self) -> None:
-        print('\n' + '*'*40)
-        print(f'Makespan: {self.sim.state.time}')
-        print('*'*40)
+        print("\n" + "*" * 40)
+        print(f"Makespan: {self.sim.state.time}")
+        print("*" * 40)
 
     @property
     def _objective(self) -> float:

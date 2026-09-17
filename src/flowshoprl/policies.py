@@ -11,9 +11,11 @@ class Policy(ABC):
 
     @abstractmethod
     def decide(self, state: StateNormalised) -> int: ...
+
     # 0:C-1 -> dispatch job of class c
     # C:C*(K+1)-1 -> delay against class c multiplier k
     # C*(K+1) -> delay until cutoff
+
 
 class Test1(Policy):
     def decide(self, state: StateNormalised) -> int:
@@ -23,11 +25,12 @@ class Test1(Policy):
                 return c
 
         if state.time < 1:
-            return len(state.job_queue)*(self.K + 1)
+            return len(state.job_queue) * (self.K + 1)
         else:
             return len(state.job_queue)
+
 
 class Test2(Policy):
     def decide(self, state: StateNormalised) -> int:
         # select a random decision
-        return randint(a=0, b=len(state.job_queue)*(self.K + 1))
+        return randint(a=0, b=len(state.job_queue) * (self.K + 1))

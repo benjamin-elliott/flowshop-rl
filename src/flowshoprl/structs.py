@@ -21,20 +21,25 @@ class Event(NamedTuple):
     seq: int
     job_id: int
 
+
 class State(NamedTuple):
     # (time, m0 setup row vector, count of jobs in queue, drain time per machine)
-    time: float 
+    time: float
     setup: npt.NDArray[np.float64]
     job_queue: list[int]
     drain_time: npt.NDArray[np.float64]
+
 
 @dataclass(slots=True)
 class Job:
     job_id: int  # index in jobs list
     job_class: int  # index into JobClasses tuple in spec
     release: float  # release time into system
-    arrived: list[float]  # arrival time at each machine (and M departure time), default [-1.0] * (M+1)
+    arrived: list[
+        float
+    ]  # arrival time at each machine (and M departure time), default [-1.0] * (M+1)
     setup_incurred: list[float]  # setup time incurred at each machine, [0.0] * M
+
 
 @dataclass(frozen=True)
 class JobClass:
@@ -59,13 +64,14 @@ class JobClass:
     def num_machines(self) -> int:
         return len(self.proc_times)
 
+
 # simulation spec; specify sim parameters before RNG
 @dataclass
 class SimSpec:
     job_classes: tuple[JobClass, ...]
     C: int  # number of classes
     M: int  # number of machines
-    k: list[float] # set of delay multipliers
+    k: list[float]  # set of delay multipliers
     T: float  # cutoff period for orders
     S: np.ndarray[tuple[int, int, int]]  # setup times matrix: M,j,i
 
@@ -103,6 +109,7 @@ class SimSpec:
                 n += 1
 
         self.mpt = self.mpt / n
+
 
 class StateNormalised(NamedTuple):
     # State, but normalised.
