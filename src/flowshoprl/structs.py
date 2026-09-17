@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from enum import Enum
 from typing import NamedTuple
 
 import numpy as np
@@ -65,6 +66,34 @@ class JobClass:
         return len(self.proc_times)
 
 
+class Regime(Enum):
+    # whether the offered load leaves the policy any room to keep up
+    SATURATED = "saturated for any policy"
+    CONTESTED = "policy-dependent: batching decides stability"
+    STABLE = "stable for any policy"
+
+
+class LoadProfile(NamedTuple):
+    # expected work arriving per unit time, per machine
+    # processing excludes setup; lower/upper add the strict setup bounds
+    processing: npt.NDArray[np.float64]
+    lower: npt.NDArray[np.float64]
+    upper: npt.NDArray[np.float64]
+
+    @property
+    def bottleneck(self) -> int:
+        # the machine that saturates first
+        return int(np.argmax(self.upper))
+
+    @property
+    def regime(self) -> Regime:
+        if self.lower.max() >= 1.0:
+            return Regime.SATURATED
+        if self.upper.max() < 1.0:
+            return Regime.STABLE
+        return Regime.CONTESTED
+
+
 # simulation spec; specify sim parameters before RNG
 @dataclass
 class SimSpec:
@@ -113,6 +142,29 @@ class SimSpec:
         S = np.array(self.S, dtype=float, copy=True)
         S.setflags(write=False)
         self.S = S
+
+    @property
+    def arrival_rates(self) -> npt.NDArray[np.float64]:
+        # expected arrivals per unit time, per class
+        return np.array([job_class.iat.mean for job_class in self.job_classes]) ** -1.0
+
+    @property
+    def load(self) -> LoadProfile:
+        # expected offered work per unit time, per machine, with strict setup bounds.
+        # every class c dispatch pays S[m][j][c] for whichever class j preceded it,
+        # so it costs between the min and max of that column whatever the policy does.
+        # exact given expected arrival counts; a single trace varies with the number sampled.
+        rates = self.arrival_rates
+        processing = np.zeros(self.M)
+        setup_lo = np.zeros(self.M)
+        setup_hi = np.zeros(self.M)
+        for c, job_class in enumerate(self.job_classes):
+            processing += rates[c] * np.asarray(job_class.proc_times)
+            col = self.S[:, :, c]  # (M, C): setup into c from every class
+            setup_lo += rates[c] * col.min(axis=1)
+            setup_hi += rates[c] * col.max(axis=1)
+
+        return LoadProfile(processing, processing + setup_lo, processing + setup_hi)
 
 
 class StateNormalised(NamedTuple):
