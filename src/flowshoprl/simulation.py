@@ -88,6 +88,9 @@ class Simulation:
 
         if self.debug:
             print(self.state)
+            print("\n")
+            print("*" * 50)
+            print("\n")
 
     # generate an arrival time trace from a specified IAT distribution, truncating at T
     def _generate_trace(
@@ -117,6 +120,9 @@ class Simulation:
             raise RuntimeError(
                 f"Time ran backwards. Popped {event.time}, current time is {current.time}. Offending event was: {event}"
             )
+
+        if self.debug:
+            print("\n")
 
         match event.event_type:
             # 0: operation completion
@@ -180,7 +186,6 @@ class Simulation:
         # call policy function and insert new events if so
         if self.debug:
 
-            print("\n")
             print(event)
             print(f"Remaining jobs: {self.remaining_jobs}/{len(self.jobs)}")
 
