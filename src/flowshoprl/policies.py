@@ -49,3 +49,34 @@ class ShortestSetup(Policy):
                 return c
 
         return len(job_classes) * (self.K + 1)
+
+
+class BatchThenWaitOnce(Policy):
+    # dispatch jobs from a class with no setup time
+    # if there are no such jobs, wait to the flowtime
+    # indifference, for the job with longest setup
+    # but only once in a row.
+    # Then, dispatch a job with the shortest setup time
+    # among jobs in the queue.
+    def __init__(self, K: int):
+        self.K = K
+        self.can_wait = True
+        self.last_class = 0
+
+    def decide(self, state: StateNormalised) -> int:
+        for c in np.where(state.setup == 0)[0]:
+            if state.job_queue[c] > 0:
+                self.can_wait = True
+                return int(c)
+
+        if self.can_wait:
+            self.can_wait = False
+            return int(np.argmax(state.setup) * (self.K + 1) - 1)
+
+        else:
+            for c in np.argsort(state.setup):
+                if state.job_queue[c] > 0:
+                    self.can_wait = True
+                    return c
+
+            return len(state.job_queue) * (self.K + 1)
