@@ -3,23 +3,42 @@ import numpy.random as rand
 
 from flowshoprl.distributions import Exponential
 from flowshoprl.evaluators import Makespan
-from flowshoprl.policies import ShortestSetup
+from flowshoprl.policies import BatchThenWaitOnce, ShortestSetup
 from flowshoprl.simulation import SimSpec, Simulation
 from flowshoprl.structs import JobClass
 
 job_classes = (
-    JobClass("a", Exponential(1.0), (1.0, 2.0), 1.0),
-    JobClass("b", Exponential(2.0), (2.0, 1.0), 1.0),
+    JobClass("a", Exponential(0.8), (0.5, 0.5), 1.0),
+    JobClass("b", Exponential(1.0), (0.5, 0.5), 1.0),
+    JobClass("c", Exponential(0.4), (0.5, 0.5), 1.0),
 )
 
-S = np.array([[[0.0, 1.0], [2.0, 0.0]], [[3.0, 0.0], [0.0, 1.0]]])
+S = np.array(
+    [
+        [[0.0, 50.0, 100.0], [50.0, 0.0, 20.0], [80.0, 100.0, 0.0]],
+        [[0.0, 100.0, 30.0], [50.0, 0.0, 100.0], [100.0, 100.0, 0.0]],
+    ]
+)
 
-spec = SimSpec(job_classes, 2, 2, [1.0], 10.0, S)
-rng = rand.default_rng(42)
-policy = ShortestSetup(1)
+spec = SimSpec(job_classes, 3, 2, [1.0], 10.0, S)
 
-sim = Simulation(rng, spec, policy, True)
-sim.simulate()
+shortest = ShortestSetup(1)
+batch = BatchThenWaitOnce(1)
 
-res = Makespan(sim)
-res.display()
+I = 200
+debug = False
+sim1_results = [0.0] * I
+sim2_results = [0.0] * I
+for i in range(I):
+    rng = rand.default_rng(i)
+    sim1 = Simulation(rand.default_rng(i), spec, shortest, debug)
+    sim2 = Simulation(rand.default_rng(i), spec, batch, debug)
+
+    sim1.simulate()
+
+    sim2.simulate()
+
+    sim1_results[i] = Makespan(sim1).evaluate()
+    sim2_results[i] = Makespan(sim2).evaluate()
+
+print(max([sim1_results[i] - sim2_results[i] for i in range(len(sim1_results))]))
