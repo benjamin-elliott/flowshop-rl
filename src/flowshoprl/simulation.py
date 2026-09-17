@@ -2,95 +2,14 @@ import heapq
 import itertools
 import math
 from dataclasses import dataclass
-from typing import NamedTuple
+from collections import deque
 
 import numpy as np
 import numpy.typing as npt
 
 import flowshoprl.distributions as dis
-
-
-# defines a class of jobs
-# iat: Inter-arrival time distribution
-# proc_times: per-machine deterministic processing times
-# weight: objective weight; defaults to 1.0
-@dataclass(frozen=True)
-class JobClass:
-    name: str
-    iat: dis.Distribution
-    proc_times: tuple[float]
-    weight: float = 1.0
-
-    def __post_init__(self) -> None:
-        for idx, pt in enumerate(self.proc_times):
-            if not pt > 0:
-                raise ValueError(
-                    f"@JobClass: ({self.name}) all processing times must be greater than 0. Got {pt} at index {idx}"
-                )
-
-        if not self.weight > 0:
-            raise ValueError(
-                f"@JobClass: ({self.name}) weight must be greater than 0. Got {self.weight}"
-            )
-
-    @property
-    def num_machines(self) -> int:
-        return len(self.proc_times)
-
-
-# simulation spec; specify sim parameters before RNG
-@dataclass(frozen=True)
-class SimSpec:
-    job_classes: tuple[JobClass, ...]
-    C: int  # number of classes
-    M: int  # number of machines
-    T: float  # cutoff period for orders
-    S: np.ndarray[tuple[int, int, int]]  # setup times matrix
-
-    def __post_init__(self) -> None:
-        if not self.C > 0:
-            raise ValueError(f"@SimSpec: C must be greater than 0. Got {self.C}")
-
-        if not self.M > 0:
-            raise ValueError(f"@SimSpec: M must be greater than 0. Got {self.M}")
-
-        if not len(self.job_classes) == self.C:
-            raise ValueError(
-                f"@SimSpec Number of job classes must match C. Got {len(self.job_classes)}, wanted {self.C}"
-            )
-
-        for job_class in self.job_classes:
-            if not job_class.num_machines == self.M:
-                raise ValueError(
-                    f"@SimSpec: ({job_class.name}) Processing times vector must have exactly {self.M} entries. Got {job_class.num_machines}"
-                )
-
-        if not self.T > 0:
-            raise ValueError(f"@SimSpec: T must be greater than 0. Got {self.T}")
-
-        if not np.all(self.S >= 0):
-            raise ValueError(
-                f"@SimSpec: All values of S must be greater than or equal to 0."
-            )
-
-
-class event(NamedTuple):
-    # declaration order is the sort order for the heap
-    time: float
-    event_type: int
-    prio: int
-    epoch: int
-    seq: int
-    job_id: int
-
-
-@dataclass(slots=True)
-class Job:
-    job_id: int  # index in jobs list
-    job_class: int  # index into JobClasses tuple in spec
-    release: float  # release time into system
-    arrived: list[float]  # arrival time at each machine, default [-1.0] * (M+1)
-    setup_incurred: list[float]  # setup time incurred at each machine, [0.0] * M
+from flowshoprl.structs import Event, Job, JobClass, State, SimSpec, StateNormalised
+from flowshoprl.policies import Policy
 
 
 # simulation instance; single spec-to-result object
@@ -100,19 +19,27 @@ class Job:
 # eval defines the post-simulation evaluation method, if any
 class Simulation:
     def __init__(
-        self, rng: np.random.Generator, spec: SimSpec, a_policy: ..., a_eval: ...
+            self, rng: np.random.Generator, spec: SimSpec, a_policy: Policy, a_eval: ..., debug: bool = False
     ) -> None:
 
+        self.spec = spec
+        self.policy = a_policy
+        self.evaluator = a_eval
+        self.m0_free = True
+        self.setup_class = 0 # default the setup state
+        self.job_ids = [deque() for _ in range(self.spec.C)]
+
         # pregenerate arrival time trace for each job class
-        self.at_trace = []  # arrival times
+        # no need to keep the rng; all values are pregenerated
+        at_trace = []  # arrival times
         class_rngs = rng.spawn(spec.C)
         for c in range(spec.C):
-            self.at_trace.append(
+            at_trace.append(
                 self._generate_trace(class_rngs[c], spec.job_classes[c].iat, spec.T)
             )
 
         # generate job list from the arrivals
-        merged = sorted((t, c) for c in range(spec.C) for t in self.at_trace[c])
+        merged = sorted((t, c) for c in range(spec.C) for t in at_trace[c])
         self.jobs = [
             Job(
                 job_id=i,
@@ -123,21 +50,38 @@ class Simulation:
             )
             for i, (t, c) in enumerate(merged)
         ]
+        self.remaining_jobs = len(self.jobs)
 
+        # initialise event heap, and populate initial events from job arrivals
         self.seq = itertools.count()
+        self.epoch = 0
         self.event_heap = []
         for j in self.jobs:
             self.event_heap.append(
-                event(
+                Event(
                     time=j.release,
                     event_type=1,
                     prio=j.job_class,
-                    epoch=0,
+                    epoch=self.epoch,
                     seq=next(self.seq),
                     job_id=j.job_id,
                 )
             )
         heapq.heapify(self.event_heap)
+
+        # populate initial state:
+        self.state = State(0.0, self.spec.S[0,0,:], [0]*spec.C, np.array([0.0]*spec.M))
+
+        # populate debug fields
+        self.debug = debug 
+        if self.debug:
+            self.decision_log = []
+
+    def simulate(self):
+        while self.remaining_jobs:
+            self._step_event()
+
+        print(self.state)
 
     # generate an arrival time trace from a specified IAT distribution, truncating at T
     def _generate_trace(
@@ -145,7 +89,7 @@ class Simulation:
     ) -> npt.NDArray[np.float64]:
 
         # an approximation for the number of samples to generate, should generally loop once
-        chunk_size = math.ceil(1.5 * T / iat.mean)
+        chunk_size = math.ceil(T / iat.mean)
         chunks = []
         t = 0.0
         while True:
@@ -157,3 +101,118 @@ class Simulation:
 
         times = np.concatenate(chunks)
         return times[: np.searchsorted(times, T, side="right")]
+
+    def _step_event(self) -> None:
+        current = self.state
+        event = heapq.heappop(self.event_heap)
+        dt = event.time - current.time
+
+        if event.time < current.time:
+            raise RuntimeError(f'Time ran backwards. Popped {event.time}, current time is {current.time}. Offending event was: {event!r}')
+
+        match event.event_type:
+            # 0: operation completion
+            case 0:
+                if event.prio == -(self.spec.M - 1):
+                    self.remaining_jobs -= 1
+
+                if event.prio == 0:
+                    self.m0_free = True
+
+                self.state = State(event.time, current.setup, current.job_queue, np.array([max(0.0, time - dt) for time in current.drain_time]))
+
+            # 1: job arrival
+            case 1:
+                # increment the job queue
+                queue_increment = [0] * self.spec.C
+                queue_increment[event.prio] = 1
+                self.state = State(event.time, current.setup, [c + i for c,i in zip(current.job_queue, queue_increment)], np.array([max(0.0, time - dt) for time in current.drain_time]))
+
+                # add the job id to the relevant deque
+                self.job_ids[event.prio].append(event.job_id)
+
+            # 2: wait/delay passed
+            case 2:
+                if event.epoch == self.epoch:
+                    self.state = State(event.time, current.setup, current.job_queue, np.array([max(0.0, time - dt) for time in current.drain_time]))
+
+        # once state is updated, check if a decision should be made
+        # call policy function and insert new events if so
+        if self.debug:
+
+            print('\n' + '='*10)
+            print(event)
+            print(f'Remaining jobs: {self.remaining_jobs}')
+
+            print(f'Deicison ready? {self._decision_ready}')
+            print(f'Drain time: {self.state.drain_time}')
+            print(f'Job queue: {self.state.job_queue}')
+        if self._decision_ready:
+            self.epoch += 1
+            self.decode_action(self.policy.decide(self.normalised_state), self.state)
+
+    @property 
+    def _decision_ready(self) -> bool:
+        # true if the current state is a decision epoch, and a deicison has not yet been made
+        # decision epoch: machine 0 free, at least one job in queue
+        return self.m0_free and sum(self.state.job_queue) > 0
+
+
+    def decode_action(self, action: int, current: State) -> None:
+        # decode the action integer into a series of event insertions
+        # 0:C-1 -> dispatch job of class c
+        # C:C*K-1 -> delay against class c multiplier k
+        # C*K -> delay until cutoff
+        if self.debug:
+            print(f'Taking action {action} at {current.time}')
+        events = []
+
+        if action <= self.spec.C - 1:
+            # insert operation completion events; decrement job queue counter; update setup class
+            c = action
+            j = self.job_ids[c].popleft()
+            self.m0_free = False
+
+            t = np.array([0.0] * self.spec.M)
+            t[0] = self.state.drain_time[0] + self.state.setup[c] + self.spec.job_classes[c].proc_times[0]
+            events.append(Event(current.time + t[0], 0, 0, self.epoch, next(self.seq), j))
+
+            #TODO: we don't actually need to consider events where non m0 machines are released - just write completions directly to jobs
+            for m in range(1, self.spec.M):
+                t[m] = max(self.state.drain_time[m], t[m-1]) + self.spec.S[m][self.setup_class][c] + self.spec.job_classes[c].proc_times[m]
+                events.append(Event(current.time + t[m], 0, -m, self.epoch, next(self.seq), j))
+
+            queue_decrement = [0]*self.spec.C
+            queue_decrement[c] = 1
+
+            self.state = State(current.time, self.spec.S[0][c][:], [c - d for c,d in zip(current.job_queue, queue_decrement)], t)
+
+            self.setup_class = c
+
+        elif action <= self.spec.C * ( len(self.spec.k) + 1) - 1:
+            # insert delay action against specified job class
+            # extract the class index and mult index
+            c = action//len(self.spec.k) - 1
+            k = action - (c+1)*self.spec.C - 1
+            delay = .5 * self.spec.k[k] * (self.state.setup[c] + self.spec.job_classes[c].proc_times[0] + self.spec.S[0,c,self.setup_class] - self.spec.job_classes[self.setup_class].proc_times[0])
+            events.append(Event(current.time + delay, 2, 0, self.epoch, next(self.seq), -1))
+
+        elif action == self.spec.C * ( len(self.spec.k) + 1 ):
+            # insert delay action until cutoff time
+            events.append(Event(self.spec.T, 2, 0, self.epoch, next(self.seq), -1))
+
+        else: 
+            raise RuntimeError(f'Specified action is invalid. Expected an integer in the range [0, {self.spec.C*len(self.spec.k)}, got {action!r}]')
+
+        for event in events:
+            heapq.heappush(self.event_heap, event)
+
+    @property
+    def normalised_state(self) -> StateNormalised:
+        current = self.state
+        return StateNormalised(
+                time=current.time/self.spec.T,
+                setup=current.setup/self.spec.mpt,
+                job_queue=current.job_queue,
+                drain_time=current.drain_time/self.spec.mpt
+                )
