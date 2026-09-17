@@ -1,6 +1,8 @@
 from abc import ABC, abstractmethod
 from random import randint
 
+import numpy as np
+
 from flowshoprl.structs import StateNormalised
 
 
@@ -34,3 +36,16 @@ class Test2(Policy):
     def decide(self, state: StateNormalised) -> int:
         # select a random decision
         return randint(a=0, b=len(state.job_queue) * (self.K + 1))
+
+
+class BatchThenShortest(Policy):
+    # always dispatch jobs from the class with the shortest setup time
+    # in the normal case, this means "same class then shortest setup"
+    # if two classes share the same setup time, lowest index is taken first
+    def decide(self, state: StateNormalised) -> int:
+        job_classes = np.argsort(state.setup)
+        for c in job_classes:
+            if state.job_queue[c] > 0:
+                return c
+
+        return len(job_classes) * (self.K + 1)

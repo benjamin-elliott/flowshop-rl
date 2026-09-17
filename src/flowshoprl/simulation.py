@@ -121,6 +121,9 @@ class Simulation:
         match event.event_type:
             # 0: operation completion
             case 0:
+                if self.debug:
+                    print(f"[OPERATION COMPLETE: M{-event.prio} J{event.job_id}]")
+
                 if event.prio == -(self.spec.M - 1):
                     self.remaining_jobs -= 1
 
@@ -136,6 +139,9 @@ class Simulation:
 
             # 1: job arrival
             case 1:
+                if self.debug:
+                    print(f"[JOB ARRIVAL: C:{event.prio} J{event.job_id}]")
+
                 # increment the job queue
                 queue_increment = [0] * self.spec.C
                 queue_increment[event.prio] = 1
@@ -151,6 +157,9 @@ class Simulation:
 
             # 2: wait/delay passed
             case 2:
+                if self.debug:
+                    print(f"[WAIT END]")
+
                 if event.epoch == self.epoch:
                     self.state = State(
                         event.time,
