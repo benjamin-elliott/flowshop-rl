@@ -38,7 +38,7 @@ class Test2(Policy):
         return randint(a=0, b=len(state.job_queue) * (self.K + 1))
 
 
-class BatchThenShortest(Policy):
+class ShortestSetup(Policy):
     # always dispatch jobs from the class with the shortest setup time
     # in the normal case, this means "same class then shortest setup"
     # if two classes share the same setup time, lowest index is taken first
