@@ -20,12 +20,11 @@ from flowshoprl.structs import (Event, Job, JobClass, SimSpec, State,
 # eval defines the post-simulation evaluation method, if any
 class Simulation:
     def __init__(
-            self, rng: np.random.Generator, spec: SimSpec, a_policy: Policy, a_eval: ..., debug: bool = False
+            self, rng: np.random.Generator, spec: SimSpec, a_policy: Policy, debug: bool = False
     ) -> None:
 
         self.spec = spec
         self.policy = a_policy
-        self.evaluator = a_eval
         self.m0_free = True
         self.setup_class = 0 # default the setup state
         self.job_ids = [deque() for _ in range(self.spec.C)]
@@ -82,7 +81,8 @@ class Simulation:
         while self.remaining_jobs:
             self._step_event()
 
-        print(self.state)
+        if self.debug:
+            print(self.state)
 
     # generate an arrival time trace from a specified IAT distribution, truncating at T
     def _generate_trace(
@@ -139,7 +139,7 @@ class Simulation:
 
                 else:
                     if self.debug:
-                        print('\n' + '='*10)
+                        print('\n')
                         print(event)
                         print('Stale delay -- skipping...')
 
@@ -149,11 +149,12 @@ class Simulation:
         # call policy function and insert new events if so
         if self.debug:
 
-            print('\n' + '='*10)
+            print('\n')
             print(event)
-            print(f'Remaining jobs: {self.remaining_jobs}')
+            print(f'Remaining jobs: {self.remaining_jobs}/{len(self.jobs)}')
 
             print(f'Deicison ready? {self._decision_ready}')
+            print(f'Epoch: {self.epoch}')
             print(f'Drain time: {self.state.drain_time}')
             print(f'Job queue: {self.state.job_queue}')
 

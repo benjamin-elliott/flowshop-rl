@@ -2,6 +2,7 @@ import numpy as np
 import numpy.random as rand
 
 from flowshoprl.distributions import Exponential
+from flowshoprl.evaluators import Makespan
 from flowshoprl.policies import Test2
 from flowshoprl.simulation import SimSpec, Simulation
 from flowshoprl.structs import JobClass
@@ -22,5 +23,8 @@ spec = SimSpec(job_classes, 2, 2, [1.0], 10.0, S)
 rng = rand.default_rng(42)
 policy = Test2(1)
 
-sim = Simulation(rng, spec, policy, None, True)
+sim = Simulation(rng, spec, policy, True)
 sim.simulate()
+
+res = Makespan(sim)
+res.display()

@@ -1,9 +1,11 @@
-from flowshoprl.simulation import Simulation, SimSpec
-from flowshoprl.structs import JobClass
-from flowshoprl.distributions import Exponential
 import numpy as np
 import numpy.random as rand
-from flowshoprl.policies import Test1   
+
+from flowshoprl.distributions import Exponential
+from flowshoprl.evaluators import Makespan
+from flowshoprl.policies import Test1
+from flowshoprl.simulation import SimSpec, Simulation
+from flowshoprl.structs import JobClass
 
 job_classes = (
         JobClass('a', Exponential(1.0), (1.0, 2.0), 1.0),
@@ -21,5 +23,8 @@ spec = SimSpec(job_classes, 2, 2, [1.0], 10.0, S)
 rng = rand.default_rng(42)
 policy = Test1(1)
 
-sim = Simulation(rng, spec, policy, None, True)
+sim = Simulation(rng, spec, policy, True)
 sim.simulate()
+
+res = Makespan(sim)
+res.display()
