@@ -29,3 +29,18 @@ class Makespan(Evaluator[float]):
     @property
     def _objective(self) -> float:
         return self.sim.state.time
+
+
+class Flowtime(Evaluator[float]):
+    def evaluate(self) -> float:
+        self.flow = 0.0
+        for job in self.sim.jobs:
+            c = job.job_class
+            self.flow += self.sim.spec.job_classes[c].weight * (job.arrived[-1] - job.release)
+        
+        return self.flow
+
+    def display(self) -> None:
+        print('\n' + "*"*40)
+        print(f'Weighted Flowtime: {self.flow}')
+        print('\n' + "*"*40)

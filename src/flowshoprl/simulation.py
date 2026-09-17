@@ -9,7 +9,8 @@ import numpy.typing as npt
 
 import flowshoprl.distributions as dis
 from flowshoprl.policies import Policy
-from flowshoprl.structs import Event, Job, JobClass, SimSpec, State, StateNormalised
+from flowshoprl.structs import (Event, Job, JobClass, SimSpec, State,
+                                StateNormalised)
 
 
 # simulation instance; single spec-to-result object
@@ -272,18 +273,21 @@ class Simulation:
                 0.5
                 * self.spec.k[k]
                 * (
-                    self.state.setup[c]
-                    + self.spec.job_classes[c].proc_times[0]
-                    + self.spec.S[0, c, self.setup_class]
-                    - self.spec.job_classes[self.setup_class].proc_times[0]
+                    sum(self.spec.S[:, self.setup_class, c])
+                    + sum(self.spec.job_classes[c].proc_times[:])
+                    + sum(self.spec.S[:, c, self.setup_class])
+                    - sum(self.spec.job_classes[self.setup_class].proc_times[:])
                 )
             )
+            if self.debug:
+                print(f'Waiting for class {self.setup_class} against class {c}. Attempted delay: {delay}')
+
             if delay > 0:
                 events.append(
                     Event(current.time + delay, 2, 0, self.epoch, next(self.seq), -1)
                 )
                 if self.debug:
-                    print(f"Action taken: delayed for class {c} ({delay})")
+                    print(f"Action taken: delayed for class {self.setup_class} against {c}. ({delay})")
 
         elif action == self.spec.C * (len(self.spec.k) + 1):
             # insert delay action until cutoff time
@@ -291,7 +295,7 @@ class Simulation:
                 events.append(Event(self.spec.T, 2, 0, self.epoch, next(self.seq), -1))
                 if self.debug:
                     print(
-                        f"Action taken: delayed for cutoff ({self.spec.T - current.time})"
+                        f"Action taken: delayed for class {self.setup_class} to the cutoff. ({self.spec.T - current.time})"
                     )
 
         else:
