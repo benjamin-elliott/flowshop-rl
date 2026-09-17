@@ -3,17 +3,31 @@ from random import randint
 
 import numpy as np
 
-from flowshoprl.structs import StateNormalised
+from flowshoprl.structs import SimSpec, StateNormalised
 
 
 class Policy(ABC):
-    def __init__(self, K: int):
+    def __init__(self, spec: SimSpec, K: int):
         # K: the number of delay multipliers
         self.K = K
+        self.C = len(spec.job_classes)
+        self.spec = spec
 
     @abstractmethod
     def decide(self, state: StateNormalised) -> int: ...
 
+    def encode(self, state:StateNormalised, action_type: int, c, k) -> int:
+        match action_type:
+            # dispatch
+            case 0:return c
+
+            # delay for current class against c, mult k
+            case 1: return int(self.C + c * self.K + k)
+
+            # delay until cutoff
+            case 2: return int(self.C + self.C * self.K + self.K-1)
+
+        return -1
     # 0:C-1 -> dispatch job of class c
     # C:C*(K+1)-1 -> delay against class c multiplier k
     # C*(K+1) -> delay until cutoff
@@ -46,37 +60,35 @@ class ShortestSetup(Policy):
         job_classes = np.argsort(state.setup)
         for c in job_classes:
             if state.job_queue[c] > 0:
-                return c
+                return self.encode(state, 0, c, None)
 
-        return len(job_classes) * (self.K + 1)
+        return self.encode(state, 2, None, None)
 
 
-class BatchThenWaitOnce(Policy):
+class BatchThenWait(Policy):
     # dispatch jobs from a class with no setup time
     # if there are no such jobs, wait to the flowtime
     # indifference, for the job with longest setup
-    # but only once in a row.
+    # but only within cutoff.
     # Then, dispatch a job with the shortest setup time
     # among jobs in the queue.
-    def __init__(self, K: int):
-        self.K = K
-        self.can_wait = True
+    def __post_init__(self, K: int):
         self.last_class = 0
 
     def decide(self, state: StateNormalised) -> int:
+        # dispatch a job with zero setup
         for c in np.where(state.setup == 0)[0]:
             if state.job_queue[c] > 0:
-                self.can_wait = True
-                return int(c)
+                return self.encode(state, 0, c, None)
 
-        if self.can_wait:
-            self.can_wait = False
-            return int(np.argmax(state.setup) * (self.K + 1) - 1)
+        # delay for current setup class against longest setup class
+        if state.time < 1:
+            c = np.argmax(state.setup)
+            return self.encode(state, 1, c, self.K-1)
 
         else:
             for c in np.argsort(state.setup):
                 if state.job_queue[c] > 0:
-                    self.can_wait = True
-                    return c
+                    return self.encode(state, 0, c, None)
 
-            return len(state.job_queue) * (self.K + 1)
+            return self.encode(state, 2, None, None)
