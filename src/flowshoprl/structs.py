@@ -1,9 +1,11 @@
-from typing import NamedTuple
 from dataclasses import dataclass
+from typing import NamedTuple
+
 import numpy as np
 import numpy.typing as npt
 
 from flowshoprl.distributions import Distribution
+
 
 class Event(NamedTuple):
     # declaration order is the sort order for the heap
@@ -104,7 +106,7 @@ class SimSpec:
 
 class StateNormalised(NamedTuple):
     # State, but normalised.
-    # time is normalised as a fraction of time remaining
+    # time is normalised as a fraction of the total time before cutoff. Exceeds 1 during cleanup
     # setup and processing times are normalised as a fraction of the mean processing time
     time: float
     setup: npt.NDArray[np.float64]
