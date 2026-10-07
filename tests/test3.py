@@ -8,9 +8,9 @@ from flowshoprl.simulation import SimSpec, Simulation
 from flowshoprl.structs import JobClass
 
 job_classes = (
-    JobClass("a", Exponential(2.0), (1.5, 0.5), 1.0),
-    JobClass("b", Exponential(3.0), (0.5, 2.5), 1.0),
-    JobClass("c", Exponential(3.0), (2.0, 1.0), 1.0),
+    JobClass("a", Exponential(10.0), (1.5, 0.5), 1.0),
+    JobClass("b", Exponential(15.0), (0.5, 2.5), 1.0),
+    JobClass("c", Exponential(15.0), (2.0, 1.0), 1.0),
 )
 
 S = np.array(
@@ -21,13 +21,13 @@ S = np.array(
 )
 
 spec = SimSpec(job_classes, 3, 2, [1.0], 100.0, S)
-print(spec.load.regime)
+print(spec.load.regime.value)
 
 shortest = ShortestSetup(spec)
 batch = BatchThenWait(spec)
 
-I = 10
-debug = False
+I = 1
+debug = True
 sim1_results = [0.0] * I
 sim2_results = [0.0] * I
 sim1_makespan = [0.0] * I
