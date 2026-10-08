@@ -8,8 +8,8 @@ from flowshoprl.simulation import SimSpec, Simulation
 from flowshoprl.structs import JobClass
 
 job_classes = (
-    JobClass("a", Exponential(1.0), (1.0, 2.0), 1.0),
-    JobClass("b", Exponential(2.0), (2.0, 1.0), 1.0),
+    JobClass("a", Exponential(1.0, 1.0), (1.0, 2.0), 1.0),
+    JobClass("b", Exponential(2.0, 1.0), (2.0, 1.0), 1.0),
 )
 
 S = np.array([[[0.0, 0.0], [0.0, 0.0]], [[0.0, 0.0], [0.0, 0.0]]])

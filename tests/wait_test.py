@@ -8,9 +8,9 @@ from flowshoprl.simulation import SimSpec, Simulation
 from flowshoprl.structs import JobClass
 
 job_classes = (
-    JobClass("a", Exponential(10.0), (1.5, 0.5), 1.0),
-    JobClass("b", Exponential(15.0), (0.5, 2.5), 1.0),
-    JobClass("c", Exponential(15.0), (2.0, 1.0), 1.0),
+    JobClass("a", Exponential(10.0, 1.0), (1.5, 0.5), 1.0),
+    JobClass("b", Exponential(15.0, 1.0), (0.5, 2.5), 1.0),
+    JobClass("c", Exponential(15.0, 1.0), (2.0, 1.0), 1.0),
 )
 
 S = np.array(
@@ -47,13 +47,24 @@ for i in range(I):
     sim1_makespan[i] = Makespan(sim1).evaluate()
     sim2_makespan[i] = Makespan(sim2).evaluate()
 
-print('Comparison: ShortestFirst vs BatchThenWait, weighted Flowtime')
-print(f'Max Delta (SF-BW) = {max([sim1_results[i] - sim2_results[i] for i in range(I)])}')
-print(f'Min Delta (SF-BW) = {min([sim1_results[i] - sim2_results[i] for i in range(I)])}')
-print(f'Avg Delta (SF-BW) = {np.mean([sim1_results[i] - sim2_results[i] for i in range(I)])}')
+print("Comparison: ShortestFirst vs BatchThenWait, weighted Flowtime")
+print(
+    f"Max Delta (SF-BW) = {max([sim1_results[i] - sim2_results[i] for i in range(I)])}"
+)
+print(
+    f"Min Delta (SF-BW) = {min([sim1_results[i] - sim2_results[i] for i in range(I)])}"
+)
+print(
+    f"Avg Delta (SF-BW) = {np.mean([sim1_results[i] - sim2_results[i] for i in range(I)])}"
+)
 
-print('Comparison: ShortestFirst vs BatchThenWait, Makespan')
-print(f'Max Delta (SF-BW) = {max([sim1_makespan[i] - sim2_makespan[i] for i in range(I)])}')
-print(f'Min Delta (SF-BW) = {min([sim1_makespan[i] - sim2_makespan[i] for i in range(I)])}')
-print(f'Avg Delta (SF-BW) = {np.mean([sim1_makespan[i] - sim2_makespan[i] for i in range(I)])}')
-
+print("Comparison: ShortestFirst vs BatchThenWait, Makespan")
+print(
+    f"Max Delta (SF-BW) = {max([sim1_makespan[i] - sim2_makespan[i] for i in range(I)])}"
+)
+print(
+    f"Min Delta (SF-BW) = {min([sim1_makespan[i] - sim2_makespan[i] for i in range(I)])}"
+)
+print(
+    f"Avg Delta (SF-BW) = {np.mean([sim1_makespan[i] - sim2_makespan[i] for i in range(I)])}"
+)
