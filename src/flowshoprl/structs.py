@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import Enum
 from typing import NamedTuple
 
@@ -36,10 +36,12 @@ class Job:
     job_id: int  # index in jobs list
     job_class: int  # index into JobClasses tuple in spec
     release: float  # release time into system
+    due: float
     arrived: list[
         float
     ]  # arrival time at each machine (and M departure time), default [-1.0] * (M+1)
     setup_incurred: list[float]  # setup time incurred at each machine, [0.0] * M
+    is_complete: bool = False
 
 
 @dataclass(frozen=True)
@@ -47,7 +49,9 @@ class JobClass:
     name: str
     iat: Distribution
     proc_times: tuple[float, ...]
+    due_coef: float
     weight: float = 1.0
+    due_offset: float = field(init=False)
 
     def __post_init__(self) -> None:
         for idx, pt in enumerate(self.proc_times):
@@ -60,6 +64,13 @@ class JobClass:
             raise ValueError(
                 f"@JobClass: ({self.name}) weight must be greater than 0. Got {self.weight}"
             )
+
+        if not self.due_coef >= 1:
+            raise ValueError(
+                f"@JobClass: ({self.name}) due date coef must be >= 1, got {self.due_coef}"
+            )
+        else:
+            object.__setattr__(self, "due_offset", self.due_coef * sum(self.proc_times))
 
     @property
     def num_machines(self) -> int:
@@ -103,6 +114,7 @@ class SimSpec:
     k: list[float]  # set of delay multipliers
     T: float  # cutoff period for orders
     S: np.ndarray[tuple[int, int, int]]  # setup times matrix: M,j,i
+    d: float  # lateness penalty objective weight
 
     def __post_init__(self) -> None:
         if not self.C > 0:

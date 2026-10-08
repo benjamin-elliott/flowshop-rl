@@ -20,7 +20,7 @@ S = np.array(
     ]
 )
 
-spec = SimSpec(job_classes, 3, 2, [1.0], 100.0, S)
+spec = SimSpec(job_classes, 3, 2, [1.0], 100.0, S, 1.0)
 print(spec.load.regime.value)
 
 shortest = ShortestSetup(spec)

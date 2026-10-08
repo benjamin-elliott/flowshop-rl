@@ -50,6 +50,7 @@ class Simulation:
                 job_id=i,
                 job_class=c,
                 release=t,
+                due=t + spec.job_classes[c].due_offset,
                 arrived=[-1.0] * (spec.M + 1),
                 setup_incurred=[0.0] * spec.M,
             )
@@ -57,11 +58,12 @@ class Simulation:
         ]
         self.remaining_jobs = len(self.jobs)
 
-        # initialise event heap, and populate initial events from job arrivals
+        # initialise event heap, and populate initial events from job arrivals and due dates
         self.seq = itertools.count()
         self.epoch = 0
         self.event_heap = []
         for j in self.jobs:
+            # arrivals
             self.event_heap.append(
                 Event(
                     time=j.release,
@@ -72,12 +74,36 @@ class Simulation:
                     job_id=j.job_id,
                 )
             )
+
+            # due dates
+            self.event_heap.append(
+                Event(
+                    time=j.due,
+                    event_type=3,
+                    prio=j.job_class,
+                    epoch=self.epoch,
+                    seq=next(self.seq),
+                    job_id=j.job_id,
+                )
+            )
+
         heapq.heapify(self.event_heap)
 
         # populate initial state:
         self.state = State(
             0.0, self.spec.S[0, 0, :], [0] * spec.C, np.array([0.0] * spec.M)
         )
+
+        # populate initial cost and tracking metrics
+        self.jobs_in_system = 0
+
+        self.accrued_time_in_system = 0.0
+        self._last_accrued_time_in_system = 0.0
+
+        self.late_penalty = 0.0
+        self._last_late_penalty = 0.0
+
+        self._time_at_last_event = 0.0
 
         # populate debug fields
         self.debug = debug
@@ -118,6 +144,9 @@ class Simulation:
         event = heapq.heappop(self.event_heap)
         dt = event.time - current.time
 
+        # accrue time in system:
+        self.accrued_time_in_system += self.jobs_in_system * dt
+
         if event.time < current.time:
             raise RuntimeError(
                 f"Time ran backwards. Popped {event.time}, current time is {current.time}. Offending event was: {event}"
@@ -132,9 +161,13 @@ class Simulation:
                 if self.debug:
                     print(f"[OPERATION COMPLETE: M{-event.prio} J{event.job_id}]")
 
+                # last machine
                 if event.prio == -(self.spec.M - 1):
                     self.remaining_jobs -= 1
+                    self.jobs_in_system -= 1
+                    self.jobs[event.job_id].is_complete = True
 
+                # first machine
                 if event.prio == 0:
                     self.m0_free = True
 
@@ -160,6 +193,8 @@ class Simulation:
                     np.array([max(0.0, time - dt) for time in current.drain_time]),
                 )
 
+                self.jobs_in_system += 1
+
                 # add the job id to the relevant deque
                 self.job_ids[event.prio].append(event.job_id)
 
@@ -184,19 +219,54 @@ class Simulation:
 
                     return
 
+            # 3: due date reached
+            case 3:
+                if self.debug:
+                    print(f"[DUE DATE]")
+
+                if self.jobs[event.job_id].is_complete:
+                    if self.debug:
+                        print("\n")
+                        print(event)
+                        print("Job has already been completed -- skipping...")
+
+                    return
+
+                else:
+                    self.late_penalty += 1 / len(self.jobs)
+
         # once state is updated, check if a decision should be made
         # call policy function and insert new events if so
         if self.debug:
 
             print(event)
+            print(f"Jobs in system: {self.jobs_in_system}")
             print(f"Remaining jobs: {self.remaining_jobs}/{len(self.jobs)}")
-
             print(f"Deicison ready? {self._decision_ready}")
             print(f"Epoch: {self.epoch}")
             print(f"Drain time: {self.state.drain_time}")
             print(f"Job queue: {self.state.job_queue}")
 
+            # objective metrics
+            print(f"Total time in system = {self.accrued_time_in_system:.4f}")
+            print(f"Lateness penalty     = {self.late_penalty:.4f}")
+
         if self._decision_ready:
+            if self.debug:
+                print("\n")
+                print("Last epoch accrual:")
+                print(
+                    f"Total time in system:{self.accrued_time_in_system - self._last_accrued_time_in_system:.4f}"
+                )
+                print(
+                    f"Late penalty: {self.late_penalty - self._last_late_penalty:.4f}"
+                )
+
+            # update matric tracking
+            self._last_accrued_time_in_system = self.accrued_time_in_system
+            self._last_late_penalty = self.late_penalty
+
+            # advance the epoch and make a new decision
             self.epoch += 1
             self.decode_action(self.policy.decide(self.normalised_state), self.state)
 
