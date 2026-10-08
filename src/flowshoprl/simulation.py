@@ -9,8 +9,7 @@ import numpy.typing as npt
 
 import flowshoprl.distributions as dis
 from flowshoprl.policies import Policy
-from flowshoprl.structs import (Event, Job, JobClass, SimSpec, State,
-                                StateNormalised)
+from flowshoprl.structs import Event, Job, JobClass, SimSpec, State, StateNormalised
 
 
 # simulation instance; single spec-to-result object
@@ -316,8 +315,8 @@ class Simulation:
                     events.append(
                         Event(current.time + t[m], 0, -m, self.epoch, next(self.seq), j)
                     )
-                    
-                    self.jobs[j].arrived[m] = current.time + t[m-1]
+
+                    self.jobs[j].arrived[m] = current.time + t[m - 1]
                     self.jobs[j].setup_incurred[m] = self.spec.S[m][self.setup_class][c]
 
                 self.jobs[j].arrived[-1] = current.time + t[-1]
@@ -359,14 +358,18 @@ class Simulation:
                 )
             )
             if self.debug:
-                print(f'Waiting for class {self.setup_class} against class {c}. Attempted delay: {delay}')
+                print(
+                    f"Waiting for class {self.setup_class} against class {c}. Attempted delay: {delay}"
+                )
 
             if delay > 0:
                 events.append(
                     Event(current.time + delay, 2, 0, self.epoch, next(self.seq), -1)
                 )
                 if self.debug:
-                    print(f"Action taken: delayed for class {self.setup_class} against {c}. ({delay})")
+                    print(
+                        f"Action taken: delayed for class {self.setup_class} against {c}. ({delay})"
+                    )
 
         elif action == self.spec.C * (len(self.spec.k) + 1):
             # insert delay action until cutoff time
@@ -385,7 +388,9 @@ class Simulation:
         # TODO remove this at some point, and handle the empty event heap as a runtime error
         # TODO once policy masking has been properly implemented
         if not events:
-            raise RuntimeError(f'Decision at {current.time} made no events. All decisions must result in event insertion to prevent hanging.')
+            raise RuntimeError(
+                f"Decision at {current.time} made no events. All decisions must result in event insertion to prevent hanging."
+            )
         for event in events:
             heapq.heappush(self.event_heap, event)
 
